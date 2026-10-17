@@ -21,6 +21,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from typing import Any, Iterable, Mapping, Optional
 
+from hyper_parallel.core.activation_memory.wrapper import CheckpointWrapper
 from hyper_parallel.tools.model_integration.structure_inventory import build_model_inventory
 from hyper_parallel.tools.model_integration.checkpoint_coverage import build_checkpoint_coverage
 from hyper_parallel.tools.model_integration.schemas import (
@@ -185,6 +186,7 @@ def _module_fqn(model: Any, target: Any) -> str:
 def _validate_gradient_domains(
     ownership: Iterable[ParameterOwnership],
 ) -> list[ModelIntegrationFinding]:
+    """Validate gradient domains"""
     grouped = defaultdict(lambda: defaultdict(list))
     for entry in ownership:
         if entry.owner_fqn == "<unmanaged>" or entry.gradient_domain == "LOCAL":
@@ -271,6 +273,7 @@ def _validate_gradient_domains(
 
 
 def _validate_materialization(model: Any) -> list[ModelIntegrationFinding]:
+    """Validate materialization"""
     meta_state = []
     for name, value in (
         *model.named_parameters(remove_duplicate=False),
@@ -335,6 +338,7 @@ def _validate_parameter_probes(
     model: Any,
     validation_spec: Optional[ModelValidationSpec],
 ) -> list[ModelIntegrationFinding]:
+    """Validate parameter probes."""
     if validation_spec is None:
         return []
     parameter_names = tuple(name for name, _ in model.named_parameters(remove_duplicate=False))
@@ -451,10 +455,10 @@ def inventory_final_model(model: Any, source: Optional[dict[str, Any]] = None) -
 
 
 def collect_activation_checkpoint_wrappers(model: Any) -> dict[str, Any]:
-    """List final activation-checkpoint wrappers without backend imports."""
+    """List final activation-checkpoint wrappers, including FSDP-derived wrappers."""
     wrappers = []
     for module_fqn, module in model.named_modules(remove_duplicate=False):
-        if type(module).__name__ != "CheckpointWrapper":
+        if not isinstance(module, CheckpointWrapper):
             continue
         wrapped = getattr(module, "_wrapped_module", None)
         wrappers.append(
